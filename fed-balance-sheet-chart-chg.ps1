@@ -75,16 +75,17 @@ $batch_1 = $ids | Select-Object -Skip  0 | Select-Object -First 12
 $batch_2 = $ids | Select-Object -Skip 12 | Select-Object -First 12
 
 # $date = '2000-01-01'
-$date = '2020-01-01'
+# $date = '2020-01-01'
+$date = '2022-01-01'
 
 # $data_1 = get-fred-data $batch_1 '2000-01-01'
 # $data_2 = get-fred-data $batch_2 '2000-01-01'
 
-$data_1 = get-fred-data $batch_1 $date
-$data_2 = get-fred-data $batch_2 $date
+# $data_1 = get-fred-data $batch_1 $date
+# $data_2 = get-fred-data $batch_2 $date
 
-# $data_1 = get-fred-data-chg $batch_1 $date
-# $data_2 = get-fred-data-chg $batch_2 $date
+$data_1 = get-fred-data-chg $batch_1 $date
+$data_2 = get-fred-data-chg $batch_2 $date
 
 
 Write-Host 'Adding columns to table...' -ForegroundColor Yellow -NoNewline
@@ -145,22 +146,36 @@ $colors = @(
 
 $i = 0
 
-function create-datasets ($names, [int]$sign)
+# function create-datasets ($names, [int]$sign)
+# {
+#     foreach ($name in $names)
+#     {
+#         @{ 
+#             label = '{0} : {1}' -f $name, $descriptions.$name
+            
+#             data = $items.ForEach({ $sign * $_.($name + '_CHG') }) 
+
+#             backgroundColor = $colors[$Global:i++ % $colors.Count]
+#         }
+#     }
+# }
+
+function create-datasets ($names, [int]$sign, $prefix)
 {
     foreach ($name in $names)
     {
         @{ 
-            label = '{0} : {1}' -f $name, $descriptions.$name
+            label = '{2} : {0} : {1}' -f $name, $descriptions.$name, $prefix
             
-            data = $items.ForEach({ $sign * $_.$name }) 
+            data = $items.ForEach({ $sign * $_.($name + '_CHG') }) 
 
             backgroundColor = $colors[$Global:i++ % $colors.Count]
         }
     }
 }
 
-$datasets_assets      = create-datasets $assets       1
-$datasets_liabilities = create-datasets $liabilities -1
+$datasets_assets      = create-datasets $assets       1 'AST'
+$datasets_liabilities = create-datasets $liabilities -1 'LIA'
 
 # assets      23
 # liabilities 10
