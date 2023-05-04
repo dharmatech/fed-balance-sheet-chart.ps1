@@ -135,6 +135,9 @@ $liabilities_data = get-fred-data-chg $liabilities $date
 $label_table = @{
     WLCFLL = 'Loans'
     WORAL = 'Repurchase agreements'
+
+    WSHONBNL = 'Notes and bonds, nominal'
+
     WSHOMCB = 'MBS'
 
     WLRRAL = 'RRP'
@@ -146,6 +149,9 @@ $label_table = @{
 $label_table_abbreviated = @{
     WLCFLL  = 'Loans'
     WORAL   = 'Repo agreements'
+
+    WSHONBNL = 'Notes bonds'
+
     WSHOMCB = 'MBS'
 
     WLRRAL  = 'RRP'
