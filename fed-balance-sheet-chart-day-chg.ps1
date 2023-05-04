@@ -191,7 +191,36 @@ $id = ([System.Uri] $result.url).Segments[-1]
 Start-Process ('https://quickchart.io/chart-maker/view/{0}' -f $id)
 
 
-function chart-day-change ($data, $side)
+$data = $assets_data
+
+$data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) } | Measure-Object -Maximum
+
+$data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) } | Measure-Object -Minimum
+
+
+$assets_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) } | Measure-Object -Minimum
+$assets_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) } | Measure-Object -Maximum
+
+
+$liabilities_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) } | Measure-Object -Minimum
+$liabilities_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) } | Measure-Object -Maximum
+
+
+@(
+$assets_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE
+$liabilities_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE
+).Count
+
+$values = @(
+    $assets_data.psobject.Members
+    $liabilities_data.psobject.Members
+    ) | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) }
+
+$min = ($values | Measure-Object -Minimum).Minimum
+$max = ($values | Measure-Object -Maximum).Maximum
+
+
+function chart-day-change ($data, $side, $y_min, $y_max)
 {
     $labels = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { 
         $series = $_.Name -replace '_CHG', '' 
@@ -219,17 +248,29 @@ function chart-day-change ($data, $side)
                 
                 datasets = @(
                     @{
-                        data = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object Value
+                        # data = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object Value
+
+                        data = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) }
                     }
                 )
             }
             options = @{
-                title = @{ display = $true; text = ('Federal Reserve Balance Sheet : {0} change {1} (millions USD)' -f $side, $data.DATE) }
+                title = @{ display = $true; text = ('Federal Reserve Balance Sheet : {0} change {1} (billions USD)' -f $side, $data.DATE) }
                 # legend = @{ position = 'left' }
-                # scales = @{ 
-                #     xAxes = @(@{ stacked = $true })
-                #     yAxes = @(@{ stacked = $true })
-                # }
+                
+                scales = @{ 
+                    # xAxes = @(@{ stacked = $true })
+                    # yAxes = @(@{ stacked = $true })
+
+                    yAxes = @(
+                        @{
+                            ticks = @{
+                                min = $y_min
+                                max = $y_max
+                            }
+                        }
+                    )
+                }
             }
         }
     } | ConvertTo-Json -Depth 100
@@ -242,9 +283,15 @@ function chart-day-change ($data, $side)
 }
 
 
-chart-day-change $assets_data 'Assets'
+# chart-day-change $assets_data      'Assets'      -40000 40000
+# chart-day-change $liabilities_data 'Liabilities' -40000 40000
 
-chart-day-change $liabilities_data 'Liabilities'
+chart-day-change $assets_data      'Assets'      $min $max
+chart-day-change $liabilities_data 'Liabilities' $min $max
+
+chart-day-change $assets_data      'Assets'      -40 40
+chart-day-change $liabilities_data 'Liabilities' -40 40
+
 # ----------------------------------------------------------------------
 # Chart liabilities
 # ----------------------------------------------------------------------
