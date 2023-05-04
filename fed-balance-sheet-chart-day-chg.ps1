@@ -1,4 +1,6 @@
 
+Param($date)
+
 # https://fred.stlouisfed.org/release/tables?rid=20&eid=1194154&od=#
 
 # ----------------------------------------------------------------------
@@ -23,7 +25,13 @@ function get-fred-data-chg ($ids, $date)
 
     $result | ConvertFrom-Csv
 }
+# ----------------------------------------------------------------------
+if ($date -eq $null)
+{
+    $recent = get-fred-data @('WALCL') (Get-Date (Get-Date).AddDays(-30) -Format 'yyyy-MM-dd')
 
+    $date = ($recent | Select-Object -Last 1).DATE
+}
 # ----------------------------------------------------------------------
 $asset_descriptions = [ordered] @{
   # WGCAL     = 'Gold Certificate Account'
@@ -74,22 +82,24 @@ $descriptions = $asset_descriptions + $liability_descriptions
 $assets      = $asset_descriptions.Keys
 $liabilities = $liability_descriptions.Keys
 
-$ids = $assets + $liabilities
+# $ids = $assets + $liabilities
 
 # FRED appears to only allow up to 12 ids to be requested via the CSV URL approach
 
-$batch_1 = $ids | Select-Object -Skip  0 | Select-Object -First 12
-$batch_2 = $ids | Select-Object -Skip 12 | Select-Object -First 12
+# $batch_1 = $ids | Select-Object -Skip  0 | Select-Object -First 12
+# $batch_2 = $ids | Select-Object -Skip 12 | Select-Object -First 12
 
+
+# $date = '2023-04-26'
 
 # ----------------------------------------------------------------------
-# Chart assets
+# assets data
 # ----------------------------------------------------------------------
-
-$date = '2023-04-26'
 
 $batch_1 = $assets | Select-Object -Skip  0 | Select-Object -First 12
 $batch_2 = $assets | Select-Object -Skip 12 | Select-Object -First 12
+
+Write-Host 'Getting asset data' -ForegroundColor Yellow
 
 $data_1 = get-fred-data-chg $batch_1 $date
 $data_2 = get-fred-data-chg $batch_2 $date
@@ -110,12 +120,17 @@ foreach ($row in $data_1)
     $row | Add-Member -NotePropertyMembers $tbl
 }
 
-
-# $data = get-fred-data-chg $assets $date
-
-$data = $data_1
-
 $assets_data = $data_1
+# ----------------------------------------------------------------------
+# liabilities data
+# ----------------------------------------------------------------------
+
+Write-Host 'Getting liability data' -ForegroundColor Yellow
+
+$data = get-fred-data-chg $liabilities $date
+
+$liabilities_data = get-fred-data-chg $liabilities $date
+
 
 $label_table = @{
     WLCFLL = 'Loans'
@@ -139,78 +154,6 @@ $label_table_abbreviated = @{
 }
 
 
-$labels = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { 
-    $series = $_.Name -replace '_CHG', '' 
-
-    $result = $label_table[$series]
-
-    if ($result -eq $null)
-    {
-        $series
-    }
-    else
-    {
-        $result
-    }
-}
-
-
-
-$json = @{
-    chart = @{
-        type = 'bar'
-        data = @{      
-
-            # labels = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object Name
-
-            labels = $labels
-            
-            datasets = @(
-                @{
-                    data = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object Value
-                }
-            )
-        }
-        options = @{
-            title = @{ display = $true; text = ('Federal Reserve Balance Sheet : Assets {0} (millions USD)' -f $data.DATE) }
-            # legend = @{ position = 'left' }
-            # scales = @{ 
-            #     xAxes = @(@{ stacked = $true })
-            #     yAxes = @(@{ stacked = $true })
-            # }
-        }
-    }
-} | ConvertTo-Json -Depth 100
-
-$result = Invoke-RestMethod -Method Post -Uri 'https://quickchart.io/chart/create' -Body $json -ContentType 'application/json'
-
-# Start-Process $result.url
-
-$id = ([System.Uri] $result.url).Segments[-1]
-
-Start-Process ('https://quickchart.io/chart-maker/view/{0}' -f $id)
-
-
-$data = $assets_data
-
-$data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) } | Measure-Object -Maximum
-
-$data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) } | Measure-Object -Minimum
-
-
-$assets_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) } | Measure-Object -Minimum
-$assets_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) } | Measure-Object -Maximum
-
-
-$liabilities_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) } | Measure-Object -Minimum
-$liabilities_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) } | Measure-Object -Maximum
-
-
-@(
-$assets_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE
-$liabilities_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE
-).Count
-
 $values = @(
     $assets_data.psobject.Members
     $liabilities_data.psobject.Members
@@ -218,6 +161,9 @@ $values = @(
 
 $min = ($values | Measure-Object -Minimum).Minimum
 $max = ($values | Measure-Object -Maximum).Maximum
+
+$min_buffer = [math]::Round(($min - 10) / 10) * 10
+$max_buffer = [math]::Round(($max + 10) / 10) * 10
 
 
 function chart-day-change ($data, $side, $y_min, $y_max)
@@ -282,87 +228,20 @@ function chart-day-change ($data, $side, $y_min, $y_max)
     Start-Process ('https://quickchart.io/chart-maker/view/{0}' -f $id)
 }
 
-
 # chart-day-change $assets_data      'Assets'      -40000 40000
 # chart-day-change $liabilities_data 'Liabilities' -40000 40000
 
-chart-day-change $assets_data      'Assets'      $min $max
-chart-day-change $liabilities_data 'Liabilities' $min $max
+Write-Host 'Generating chart' -ForegroundColor Yellow
 
-chart-day-change $assets_data      'Assets'      -40 40
-chart-day-change $liabilities_data 'Liabilities' -40 40
+chart-day-change $assets_data      'Assets'      $min_buffer $max_buffer
+chart-day-change $liabilities_data 'Liabilities' $min_buffer $max_buffer
 
-# ----------------------------------------------------------------------
-# Chart liabilities
-# ----------------------------------------------------------------------
-
-$date = '2023-04-26'
-
-$data = get-fred-data-chg $liabilities $date
-
-$liabilities_data = get-fred-data-chg $liabilities $date
-
-
-$data
-
-
-$data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ft *
-
-# MemberType IsSettable IsGettable Value    TypeNameOfValue Name             IsInstance
-# ---------- ---------- ---------- -----    --------------- ----             ----------
-# NoteProperty       True       True 685.0    System.String   WLFN_CHG               True
-# NoteProperty       True       True -27538.0 System.String   WLRRAL_CHG             True
-# NoteProperty       True       True 0.0      System.String   TERMT_CHG              True
-# NoteProperty       True       True -32791.0 System.String   WLODLL_CHG             True
-# NoteProperty       True       True 31114.0  System.String   WDTGAL_CHG             True
-# NoteProperty       True       True 0.0      System.String   WDFOL_CHG              True
-# NoteProperty       True       True 3455.0   System.String   WLODL_CHG              True
-# NoteProperty       True       True 0.0      System.String   H41RESH4ENWW_CHG       True
-# NoteProperty       True       True 125.0    System.String   WLDACLC_CHG            True
-# NoteProperty       True       True -5548.0  System.String   WLAD_CHG               True
-
-$data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [ordered]@{ x = $_.Name; y = $_.Value } }
-
-
-$items = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [ordered]@{ x = $_.Name; y = $_.Value } }
-
-$data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object Name
-
-$data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object Value
+# chart-day-change $assets_data      'Assets'      -40 40
+# chart-day-change $liabilities_data 'Liabilities' -40 40
 
 
 # ----------------------------------------------------------------------
-$json = @{
-    chart = @{
-        type = 'bar'
-        data = @{      
-
-            labels = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object Name
-            
-            datasets = @(
-                @{
-                    data = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object Value
-                }
-            )
-        }
-        options = @{
-            # title = @{ display = $true; text = 'Federal Reserve Balance Sheet (millions USD)' }
-            # legend = @{ position = 'left' }
-            # scales = @{ 
-            #     xAxes = @(@{ stacked = $true })
-            #     yAxes = @(@{ stacked = $true })
-            # }
-        }
-    }
-} | ConvertTo-Json -Depth 100
-
-$result = Invoke-RestMethod -Method Post -Uri 'https://quickchart.io/chart/create' -Body $json -ContentType 'application/json'
-
-# Start-Process $result.url
-
-$id = ([System.Uri] $result.url).Segments[-1]
-
-Start-Process ('https://quickchart.io/chart-maker/view/{0}' -f $id)
+exit
 # ----------------------------------------------------------------------
 
 
