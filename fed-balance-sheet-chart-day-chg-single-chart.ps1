@@ -61,7 +61,16 @@ $asset_descriptions = [ordered] @{
     WUPSHO    = 'Unamortized Premiums on Securities Held Outright'
     WUDSHO    = 'Unamortized Discounts on Securities Held Outright' # Negative value
     WORAL     = 'Repurchase Agreements'
+    
     WLCFLL    = 'Loans'  
+    # Loans sub-items
+    # WLCFLPCL        = Primary Credit
+    # WLCFLSCL        = Secondary Credit
+    # WLCFLSECL       = Seasonal Credit
+    # H41RESPPALDJNWW = Payroll Protection Program Liquidity Facility
+    # H41RESPPALDKNWW = Bank Term Funding Program
+    # WLCFOCEL        = Other Credit Extensions
+    
     
     SWPT      = 'Central Bank Liquidity Swaps'
     WFCDA     = 'Foreign Currency Denominated Assets'
@@ -95,22 +104,12 @@ $descriptions = $asset_descriptions + $liability_descriptions
 $assets      = $asset_descriptions.Keys
 $liabilities = $liability_descriptions.Keys
 
-# $ids = $assets + $liabilities
+$ids = $assets + $liabilities
 
 # FRED appears to only allow up to 12 ids to be requested via the CSV URL approach
 
-# $batch_1 = $ids | Select-Object -Skip  0 | Select-Object -First 12
-# $batch_2 = $ids | Select-Object -Skip 12 | Select-Object -First 12
-
-
-# $date = '2023-04-26'
-
-# ----------------------------------------------------------------------
-# assets data
-# ----------------------------------------------------------------------
-
-$batch_1 = $assets | Select-Object -Skip  0 | Select-Object -First 12
-$batch_2 = $assets | Select-Object -Skip 12 | Select-Object -First 12
+$batch_1 = $ids | Select-Object -Skip  0 | Select-Object -First 12
+$batch_2 = $ids | Select-Object -Skip 12 | Select-Object -First 12
 
 Write-Host 'Getting asset data' -ForegroundColor Yellow
 
@@ -136,33 +135,98 @@ foreach ($row in $data_1)
     $row | Add-Member -NotePropertyMembers $tbl
 }
 
-$assets_data = $data_1
+$data = $data_1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# $date = '2023-04-26'
+
+# ----------------------------------------------------------------------
+# assets data
+# ----------------------------------------------------------------------
+
+# $batch_1 = $assets | Select-Object -Skip  0 | Select-Object -First 12
+# $batch_2 = $assets | Select-Object -Skip 12 | Select-Object -First 12
+
+# Write-Host 'Getting asset data' -ForegroundColor Yellow
+
+# # $data_1 = get-fred-data-chg $batch_1 $date
+# # $data_2 = get-fred-data-chg $batch_2 $date
+
+# $data_1 = get-fred-data-chg-day $batch_1 $date
+# $data_2 = get-fred-data-chg-day $batch_2 $date
+
+# foreach ($row in $data_1)
+# {
+#     $other = $data_2 | Where-Object DATE -EQ $row.DATE
+
+#     $tbl = [ordered]@{}
+    
+#     foreach ($prop in $other.psobject.Properties)
+#     {
+#         $tbl[$prop.Name] = $prop.Value
+#     }
+
+#     $tbl.Remove('DATE')
+
+#     $row | Add-Member -NotePropertyMembers $tbl
+# }
+
+# $assets_data = $data_1
 # ----------------------------------------------------------------------
 # liabilities data
 # ----------------------------------------------------------------------
 
-Write-Host 'Getting liability data' -ForegroundColor Yellow
+# Write-Host 'Getting liability data' -ForegroundColor Yellow
 
-$data = get-fred-data-chg $liabilities $date
+# $data = get-fred-data-chg $liabilities $date
 
 # $liabilities_data = get-fred-data-chg $liabilities $date
 
-$liabilities_data = get-fred-data-chg-day $liabilities $date
+# $liabilities_data = get-fred-data-chg-day $liabilities $date
 
 
-# $label_table = @{
-#     WLCFLL = 'Loans'
-#     WORAL = 'Repurchase agreements'
+$label_table = @{
+    WLCFLL = 'Loans'
+    WORAL = 'Repurchase agreements'
 
-#     WSHONBNL = 'Notes and bonds, nominal'
+    WSHONBNL = 'Notes and bonds, nominal'
 
-#     WSHOMCB = 'MBS'
+    WSHOMCB = 'MBS'
 
-#     WLRRAL = 'RRP'
-#     WLODLL = 'Other deposits held by depository institutions'
-#     WDTGAL = 'TGA'
+    WLRRAL = 'RRP'
+    WLODLL = 'Other deposits held by depository institutions'
+    WDTGAL = 'TGA'
 
-# }
+}
+
+
+$label_table_prefixes = @{
+    WLCFLL = 'Loans'
+    WORAL = 'Repurchase agreements'
+
+    WSHONBNL = 'Notes and bonds, nominal'
+
+    WSHOMCB = 'MBS'
+
+    WLRRAL = 'RRP'
+    WLODLL = 'Other deposits held by depository institutions'
+    WDTGAL = 'TGA'
+
+}
+
 
 $label_table_abbreviated = @{
     WLCFLL  = 'Loans'
@@ -184,10 +248,8 @@ $label_table_abbreviated = @{
 }
 
 
-$values = @(
-    $assets_data.psobject.Members
-    $liabilities_data.psobject.Members
-    ) | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) }
+$values = $data.psobject.Members | 
+    Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) }
 
 $min = ($values | Measure-Object -Minimum).Minimum
 $max = ($values | Measure-Object -Maximum).Maximum
@@ -196,9 +258,39 @@ $min_buffer = [math]::Round(($min - 10) / 10) * 10
 $max_buffer = [math]::Round(($max + 10) / 10) * 10
 
 
-function chart-day-change ($data, $side, $y_min, $y_max)
+$assets_data = $data | Select-Object *
+
+$assets_data.WLFN_CHG         = $null
+$assets_data.WLRRAL_CHG       = $null
+$assets_data.TERMT_CHG        = $null
+$assets_data.WLODLL_CHG       = $null
+$assets_data.WDTGAL_CHG       = $null
+$assets_data.WDFOL_CHG        = $null
+$assets_data.WLODL_CHG        = $null
+$assets_data.H41RESH4ENWW_CHG = $null
+$assets_data.WLDACLC_CHG      = $null
+$assets_data.WLAD_CHG         = $null
+
+$liabilities_data = $data | Select-Object *
+
+$liabilities_data.WSHOBL_CHG    = $null
+$liabilities_data.WSHONBNL_CHG  = $null
+$liabilities_data.WSHONBIIL_CHG = $null
+$liabilities_data.WSHOICL_CHG   = $null
+$liabilities_data.WSHOFADSL_CHG = $null
+$liabilities_data.WSHOMCB_CHG   = $null
+$liabilities_data.WUPSHO_CHG    = $null
+$liabilities_data.WUDSHO_CHG    = $null
+$liabilities_data.WORAL_CHG     = $null
+$liabilities_data.WLCFLL_CHG    = $null
+$liabilities_data.SWPT_CHG      = $null
+$liabilities_data.WFCDA_CHG     = $null
+$liabilities_data.WAOAL_CHG     = $null
+
+function chart-day-change ()
 {
-    $labels = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { 
+    # $labels = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { 
+    $labels = $assets_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object {         
         $series = $_.Name -replace '_CHG', '' 
     
         # $result = $label_table[$series]
@@ -216,8 +308,8 @@ function chart-day-change ($data, $side, $y_min, $y_max)
     
     $json = @{
         chart = @{
-            type = 'bar'
-            # type = 'horizontalBar'
+            # type = 'bar'
+            type = 'horizontalBar'
             data = @{      
                         
                 labels = $labels
@@ -226,8 +318,20 @@ function chart-day-change ($data, $side, $y_min, $y_max)
                     @{
                         # data = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object Value
 
-                        data = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) }
+                        # data = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) }
+
+                        label = 'Assets'
+                        data = $assets_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) }
                     }
+                    @{
+                        # data = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object Value
+
+                        # data = $data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) }
+
+                        label = 'Liabilities'
+                        data = $liabilities_data.psobject.Members | Where-Object MemberType -EQ NoteProperty | Where-Object Name -NE DATE | ForEach-Object { [math]::Round($_.Value / 1000, 2) }
+                    }
+
                 )
             }
             options = @{
@@ -238,14 +342,14 @@ function chart-day-change ($data, $side, $y_min, $y_max)
                     # xAxes = @(@{ stacked = $true })
                     # yAxes = @(@{ stacked = $true })
 
-                    yAxes = @(
-                        @{
-                            ticks = @{
-                                min = $y_min
-                                max = $y_max
-                            }
-                        }
-                    )
+                    # yAxes = @(
+                    #     @{
+                    #         ticks = @{
+                    #             min = $y_min
+                    #             max = $y_max
+                    #         }
+                    #     }
+                    # )
                 }
             }
         }
@@ -263,8 +367,12 @@ function chart-day-change ($data, $side, $y_min, $y_max)
 
 Write-Host 'Generating chart' -ForegroundColor Yellow
 
-chart-day-change $assets_data      'Assets'      $min_buffer $max_buffer
-chart-day-change $liabilities_data 'Liabilities' $min_buffer $max_buffer
+# chart-day-change $assets_data      'Assets'      $min_buffer $max_buffer
+# chart-day-change $liabilities_data 'Liabilities' $min_buffer $max_buffer
+
+# chart-day-change $data '' # $min_buffer $max_buffer
+
+chart-day-change
 
 # chart-day-change $assets_data      'Assets'      -40 40
 # chart-day-change $liabilities_data 'Liabilities' -40 40

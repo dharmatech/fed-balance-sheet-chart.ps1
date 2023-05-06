@@ -1,4 +1,6 @@
 
+# Replace Loans line item with components
+
 Param($date = '2020-01-01')
 
 # ----------------------------------------------------------------------
@@ -40,7 +42,12 @@ $asset_descriptions = [ordered] @{
     WUPSHO    = 'Unamortized Premiums on Securities Held Outright'
     WUDSHO    = 'Unamortized Discounts on Securities Held Outright' # Negative value
     WORAL     = 'Repurchase Agreements'
-    WLCFLL    = 'Loans'  
+    
+    # WLCFLL    = 'Loans'  
+    # Loans line items
+    WLCFLPCL = 'Primary Credit'
+    #H41RESPPALDKNWW = 'Bank Term Funding Program'
+    WLCFOCEL = 'Other Credit Extensions'
     
     SWPT      = 'Central Bank Liquidity Swaps'
     WFCDA     = 'Foreign Currency Denominated Assets'
@@ -64,10 +71,15 @@ $liability_descriptions = [ordered] @{
     # Capital
 }
 
-$descriptions = $asset_descriptions + $liability_descriptions
+$weekly_descriptions = @{
+    H41RESPPALDKNWW = 'Bank Term Funding Program'
+}
+
+$descriptions = $asset_descriptions + $liability_descriptions + $weekly_descriptions
 
 $assets      = $asset_descriptions.Keys
 $liabilities = $liability_descriptions.Keys
+$weekly      = $weekly_descriptions.Keys
 
 $ids = $assets + $liabilities
 
@@ -75,6 +87,8 @@ $ids = $assets + $liabilities
 
 $batch_1 = $ids | Select-Object -Skip  0 | Select-Object -First 12
 $batch_2 = $ids | Select-Object -Skip 12 | Select-Object -First 12
+
+# $batch_3 = $weekly | Select-Object -Skip 0 | Select-Object -First 12
 
 # $date = '2000-01-01'
 # $date = '2020-01-01'
@@ -85,6 +99,8 @@ $batch_2 = $ids | Select-Object -Skip 12 | Select-Object -First 12
 $data_1 = get-fred-data $batch_1 $date
 $data_2 = get-fred-data $batch_2 $date
 
+$data_weekly = get-fred-data $weekly $date
+
 # $data_1 = get-fred-data-chg $batch_1 $date
 # $data_2 = get-fred-data-chg $batch_2 $date
 
@@ -94,6 +110,22 @@ Write-Host 'Adding columns to table...' -ForegroundColor Yellow -NoNewline
 foreach ($row in $data_1)
 {
     $other = $data_2 | Where-Object DATE -EQ $row.DATE
+
+    $tbl = [ordered]@{}
+    
+    foreach ($prop in $other.psobject.Properties)
+    {
+        $tbl[$prop.Name] = $prop.Value
+    }
+
+    $tbl.Remove('DATE')
+
+    $row | Add-Member -NotePropertyMembers $tbl
+}
+
+foreach ($row in $data_1)
+{
+    $other = $data_weekly | Where-Object DATE -EQ $row.DATE
 
     $tbl = [ordered]@{}
     
@@ -165,6 +197,7 @@ function create-datasets ($names, [int]$sign)
 
 $datasets_assets      = create-datasets $assets       1
 $datasets_liabilities = create-datasets $liabilities -1
+$datasets_weekly      = create-datasets $weekly       1
 
 # assets      23
 # liabilities 10
@@ -176,7 +209,7 @@ $json = @{
         # type = 'line'
         data = @{            
             labels = $items.ForEach({ $_.DATE })
-            datasets = $datasets_assets + $datasets_liabilities
+            datasets = $datasets_assets + $datasets_liabilities + $datasets_weekly
         }
         options = @{
             title = @{ display = $true; text = 'Federal Reserve Balance Sheet (millions USD)' }
@@ -199,4 +232,6 @@ Start-Process ('https://quickchart.io/chart-maker/view/{0}' -f $id)
 # ----------------------------------------------------------------------
 exit
 # ----------------------------------------------------------------------
-. .\fed-balance-sheet-chart.ps1 -date '2023-01-01'
+. .\fed-balance-sheet-chart-detail.ps1 -date '2020-01-01'
+. .\fed-balance-sheet-chart-detail.ps1 -date '2023-01-01'
+. .\fed-balance-sheet-chart-detail.ps1 -date '2023-03-01'
