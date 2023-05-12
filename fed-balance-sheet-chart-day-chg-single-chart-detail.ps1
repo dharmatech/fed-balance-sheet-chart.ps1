@@ -62,19 +62,23 @@ $asset_descriptions = [ordered] @{
     WUDSHO    = 'Unamortized Discounts on Securities Held Outright' # Negative value
     WORAL     = 'Repurchase Agreements'
     
-    WLCFLL    = 'Loans'  
+    # WLCFLL    = 'Loans'  
     # Loans sub-items
-    # WLCFLPCL        = Primary Credit
-    # WLCFLSCL        = Secondary Credit
-    # WLCFLSECL       = Seasonal Credit
-    # H41RESPPALDJNWW = Payroll Protection Program Liquidity Facility
-    # H41RESPPALDKNWW = Bank Term Funding Program
-    # WLCFOCEL        = Other Credit Extensions
+    WLCFLPCL        = 'Loans : Primary Credit'
+    WLCFLSCL        = 'Loans : Secondary Credit'
+    WLCFLSECL       = 'Loans : Seasonal Credit'
+    H41RESPPALDJNWW = 'Loans : Payroll Protection Program Liquidity Facility'
+    # H41RESPPALDKNWW = 'Bank Term Funding Program'                       # weekly
+    WLCFOCEL        = 'Loans : Other Credit Extensions'
     
     
     SWPT      = 'Central Bank Liquidity Swaps'
     WFCDA     = 'Foreign Currency Denominated Assets'
     WAOAL     = 'Other Assets'
+}
+
+$asset_weekly_descriptions = [ordered] @{
+    H41RESPPALDKNWW = 'Loans : Bank Term Funding Program'
 }
 
 $liability_descriptions = [ordered] @{
@@ -99,41 +103,76 @@ $capital_descriptions = [ordered] @{
 
 }
 
-$descriptions = $asset_descriptions + $liability_descriptions
+$descriptions = $asset_descriptions + $asset_weekly_descriptions + $liability_descriptions
 
-$assets      = $asset_descriptions.Keys
-$liabilities = $liability_descriptions.Keys
+$assets         = $asset_descriptions.Keys
+$assets_weekly  = $asset_weekly_descriptions.Keys
+$liabilities    = $liability_descriptions.Keys
 
 $ids = $assets + $liabilities
 
 # FRED appears to only allow up to 12 ids to be requested via the CSV URL approach
 
-$batch_1 = $ids | Select-Object -Skip  0 | Select-Object -First 12
-$batch_2 = $ids | Select-Object -Skip 12 | Select-Object -First 12
+$assets_ids_1       = $assets           | Select-Object -Skip   0 | Select-Object -First 12
+$assets_ids_2       = $assets           | Select-Object -Skip  12 | Select-Object -First 12
+$assets_weekly_ids  = $assets_weekly    | Select-Object -Skip   0 | Select-Object -First 12
+$liabilities_ids    = $liabilities      | Select-Object -Skip   0 | Select-Object -First 12
+
+
+# $batch_1 = $ids | Select-Object -Skip  0 | Select-Object -First 12
+# $batch_2 = $ids | Select-Object -Skip 12 | Select-Object -First 12
 
 Write-Host 'Getting asset data' -ForegroundColor Yellow
 
 # $data_1 = get-fred-data-chg $batch_1 $date
 # $data_2 = get-fred-data-chg $batch_2 $date
 
-$data_1 = get-fred-data-chg-day $batch_1 $date
-$data_2 = get-fred-data-chg-day $batch_2 $date
+# $data_1 = get-fred-data-chg-day $batch_1 $date
+# $data_2 = get-fred-data-chg-day $batch_2 $date
 
-foreach ($row in $data_1)
+$data_1 = get-fred-data-chg-day $assets_ids_1       $date
+$data_2 = get-fred-data-chg-day $assets_ids_2       $date
+$data_3 = get-fred-data-chg-day $assets_weekly_ids  $date
+$data_4 = get-fred-data-chg-day $liabilities_ids    $date
+
+function add-columns ($data_1, $data_2)
 {
-    $other = $data_2 | Where-Object DATE -EQ $row.DATE
-
-    $tbl = [ordered]@{}
-    
-    foreach ($prop in $other.psobject.Properties)
+    foreach ($row in $data_1)
     {
-        $tbl[$prop.Name] = $prop.Value
+        $other = $data_2 | Where-Object DATE -EQ $row.DATE
+    
+        $tbl = [ordered]@{}
+        
+        foreach ($prop in $other.psobject.Properties)
+        {
+            $tbl[$prop.Name] = $prop.Value
+        }
+    
+        $tbl.Remove('DATE')
+    
+        $row | Add-Member -NotePropertyMembers $tbl
     }
-
-    $tbl.Remove('DATE')
-
-    $row | Add-Member -NotePropertyMembers $tbl
 }
+
+add-columns $data_1 $data_2
+add-columns $data_1 $data_3
+add-columns $data_1 $data_4
+
+# foreach ($row in $data_1)
+# {
+#     $other = $data_2 | Where-Object DATE -EQ $row.DATE
+
+#     $tbl = [ordered]@{}
+    
+#     foreach ($prop in $other.psobject.Properties)
+#     {
+#         $tbl[$prop.Name] = $prop.Value
+#     }
+
+#     $tbl.Remove('DATE')
+
+#     $row | Add-Member -NotePropertyMembers $tbl
+# }
 
 $data = $data_1
 
@@ -273,19 +312,25 @@ $assets_data.WLAD_CHG         = $null
 
 $liabilities_data = $data | Select-Object *
 
-$liabilities_data.WSHOBL_CHG    = $null
-$liabilities_data.WSHONBNL_CHG  = $null
-$liabilities_data.WSHONBIIL_CHG = $null
-$liabilities_data.WSHOICL_CHG   = $null
-$liabilities_data.WSHOFADSL_CHG = $null
-$liabilities_data.WSHOMCB_CHG   = $null
-$liabilities_data.WUPSHO_CHG    = $null
-$liabilities_data.WUDSHO_CHG    = $null
-$liabilities_data.WORAL_CHG     = $null
-$liabilities_data.WLCFLL_CHG    = $null
-$liabilities_data.SWPT_CHG      = $null
-$liabilities_data.WFCDA_CHG     = $null
-$liabilities_data.WAOAL_CHG     = $null
+$liabilities_data.WSHOBL_CHG          = $null
+$liabilities_data.WSHONBNL_CHG        = $null
+$liabilities_data.WSHONBIIL_CHG       = $null
+$liabilities_data.WSHOICL_CHG         = $null
+$liabilities_data.WSHOFADSL_CHG       = $null
+$liabilities_data.WSHOMCB_CHG         = $null
+$liabilities_data.WUPSHO_CHG          = $null
+$liabilities_data.WUDSHO_CHG          = $null
+$liabilities_data.WORAL_CHG           = $null
+# $liabilities_data.WLCFLL_CHG        = $null
+$liabilities_data.SWPT_CHG            = $null
+$liabilities_data.WFCDA_CHG           = $null
+$liabilities_data.WAOAL_CHG           = $null
+$liabilities_data.WLCFLPCL_CHG        = $null
+$liabilities_data.WLCFLSCL_CHG        = $null
+$liabilities_data.WLCFLSECL_CHG       = $null
+$liabilities_data.H41RESPPALDJNWW_CHG = $null
+$liabilities_data.WLCFOCEL_CHG        = $null
+$liabilities_data.H41RESPPALDKNWW_CHG = $null
 
 function chart-day-change ()
 {
