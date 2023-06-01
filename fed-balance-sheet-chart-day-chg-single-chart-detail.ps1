@@ -430,7 +430,8 @@ chart-day-change
 # ----------------------------------------------------------------------
 exit
 # ----------------------------------------------------------------------
-.\fed-balance-sheet-chart-day-chg.ps1 -date '2023-04-26'
+.\fed-balance-sheet-chart-day-chg-single-chart-detail.ps1 -date '2023-04-19'
+.\fed-balance-sheet-chart-day-chg-single-chart-detail.ps1 -date '2023-01-25'
 
 $date = '2023-04-26'
 
