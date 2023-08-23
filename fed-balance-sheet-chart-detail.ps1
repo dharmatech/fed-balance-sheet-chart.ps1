@@ -1,7 +1,7 @@
 
 # Replace Loans line item with components
 
-Param($date = '2020-01-01')
+Param($date = '2020-01-01', [switch]$display_chart_url, [switch]$save_iframe)
 
 # ----------------------------------------------------------------------
 function head () { $input | Select-Object -First 10 }
@@ -228,7 +228,35 @@ $result = Invoke-RestMethod -Method Post -Uri 'https://quickchart.io/chart/creat
 
 $id = ([System.Uri] $result.url).Segments[-1]
 
-Start-Process ('https://quickchart.io/chart-maker/view/{0}' -f $id)
+if ($display_chart_url)
+{
+    Write-Host
+
+    Write-Host ('https://quickchart.io/chart-maker/view/{0}' -f $id) -ForegroundColor Yellow
+}
+else
+{
+    Start-Process ('https://quickchart.io/chart-maker/view/{0}' -f $id)
+}
+# ----------------------------------------------------------------------
+$html_template = @"
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>{0}</title>
+    </head>
+    <body>
+        <div style="padding-bottom: 56.25%; position: relative; display:block; width: 100%;">
+            <iframe width="100%" height="100%" src="https://quickchart.io/chart-maker/view/{1}" frameborder="0" style="position: absolute; top:0; left: 0"></iframe>
+        </div>
+    </body>
+</html>
+"@
+
+if ($save_iframe)
+{
+    $html_template -f 'Federal Reserve Balance Sheet (millions USD)', $id > fed-balance-sheet-chart-detail.html
+}
 # ----------------------------------------------------------------------
 exit
 # ----------------------------------------------------------------------
